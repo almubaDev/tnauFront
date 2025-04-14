@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,16 @@ import {
   Image,
   ScrollView,
   ActivityIndicator,
-  Dimensions
+  Dimensions,
+  Animated,
+  Easing
 } from 'react-native';
 import { Video } from 'expo-av';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { fetchWithAuth } from '../apiHelpers';
 import CustomAlert from '../components/CustomAlert';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sessionEvents } from '../App';
 
 // Importar componentes modularizados
 import CartaTarot from '../components/tarot/CartaTarot';
@@ -28,7 +32,8 @@ import HistorialModal from '../components/tarot/HistorialModal';
 // Obtenemos dimensiones de la pantalla para layouts responsivos
 const { width, height } = Dimensions.get('window');
 
-export default function TarotScreen({ navigation }) {
+export default function TarotScreen() {
+  const navigation = useNavigation();
   // Estados principales
   const [perfil, setPerfil] = useState(null);
   const [tiposTirada, setTiposTirada] = useState([]);
@@ -38,6 +43,39 @@ export default function TarotScreen({ navigation }) {
   const [tiradaActual, setTiradaActual] = useState(null);
   const [historialTiradas, setHistorialTiradas] = useState([]);
   const [cartaSeleccionada, setCartaSeleccionada] = useState(null);
+  const [isAtBottom, setIsAtBottom] = useState(false);
+  
+  // Referencia al ScrollView
+  const scrollViewRef = useRef(null);
+  
+  // Valor de animación para el parpadeo
+  const fadeAnim = useRef(new Animated.Value(0.3)).current;
+  
+  // Configurar la animación de parpadeo
+  useEffect(() => {
+    const startAnimation = () => {
+      Animated.sequence([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 800,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 0.3,
+          duration: 800,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]).start(startAnimation);
+    };
+    
+    startAnimation();
+    
+    return () => {
+      fadeAnim.stopAnimation();
+    };
+  }, [fadeAnim]);
   
   // Estados modales
   const [modalSeleccionVisible, setModalSeleccionVisible] = useState(false);
@@ -49,6 +87,15 @@ export default function TarotScreen({ navigation }) {
   // Estados de carga y errores
   const [loading, setLoading] = useState(true);
   const [loadingTirada, setLoadingTirada] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("Realizando tirada...");
+  
+  // Mensajes de carga para motor náutica
+  const mensajesCarga = [
+    "Conectando con Motor Náutica...",
+    "Iniciando sistema de redes neuronales cargadas...",
+    "Seleccionando red neuronal de tarotista cargada...",
+    "Navegando en sistema Náutica..."
+  ];
   
   // Estados para alertas personalizadas
   const [alertVisible, setAlertVisible] = useState(false);
@@ -80,23 +127,47 @@ export default function TarotScreen({ navigation }) {
     try {
       // Cargar perfil de usuario
       const perfilResponse = await fetchWithAuth('/api/perfil/');
-      if (perfilResponse.ok) {
-        const perfilData = await perfilResponse.json();
-        setPerfil(perfilData);
-      }
-
       // Cargar tipos de tirada disponibles
       const tiposResponse = await fetchWithAuth('/api/listar-tipos-tirada/');
-      if (tiposResponse.ok) {
-        const tiposData = await tiposResponse.json();
-        setTiposTirada(tiposData || []);
-      }
-
       // Cargar historial de tiradas
       const historialResponse = await fetchWithAuth('/api/historial-tiradas/');
-      if (historialResponse.ok) {
+      
+      // Check for auth reset event
+      if (perfilResponse.authReset || tiposResponse.authReset || historialResponse.authReset) {
+        console.log('Auth reset detected in TarotScreen');
+        sessionEvents.emit('authReset');
+        return;
+      }
+      
+      if (perfilResponse.ok && tiposResponse.ok && historialResponse.ok) {
+        const perfilData = await perfilResponse.json();
+        const tiposData = await tiposResponse.json();
         const historialData = await historialResponse.json();
+        
+        setPerfil(perfilData);
+        setTiposTirada(tiposData || []);
         setHistorialTiradas(historialData || []);
+      } else if (perfilResponse.status === 401 || tiposResponse.status === 401 || historialResponse.status === 401) {
+        // Handle session expiration
+        showAlert(
+          'Sesión expirada',
+          'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.',
+          [{
+            text: 'Aceptar',
+            onPress: async () => {
+              setAlertVisible(false);
+              await AsyncStorage.removeItem('access');
+              await AsyncStorage.removeItem('refresh');
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Welcome' }],
+              });
+            }
+          }]
+        );
+      } else {
+        console.error('Error cargando datos:', perfilResponse.status, tiposResponse.status, historialResponse.status);
+        showAlert('Error', 'No se pudieron cargar los datos. Verifica tu conexión.');
       }
     } catch (error) {
       console.error('Error cargando datos iniciales:', error);
@@ -134,10 +205,13 @@ export default function TarotScreen({ navigation }) {
 
     // Si tiene suscripción y no ha excedido límites
     if (perfil.tiene_suscripcion && tiradasUsadas < limitePermitido) {
+      const tiradasDisponibles = limitePermitido - tiradasUsadas;
       return { 
         puede: true, 
-        mensaje: 'Tirada disponible con tu suscripción', 
-        costoGemas: 0 
+        mensaje: `Tiradas disponibles: ${tiradasDisponibles}/${limitePermitido}`, 
+        costoGemas: 0,
+        tiradasUsadas,
+        limitePermitido 
       };
     }
 
@@ -169,6 +243,11 @@ export default function TarotScreen({ navigation }) {
     }
     
     setModalSeleccionVisible(true);
+  };
+  
+  // Función para volver a la pantalla inicial de tarot sin tirada activa
+  const volverAPantallaPrincipal = () => {
+    setTiradaActual(null);
   };
 
   // Manejar continuar después de seleccionar tirada
@@ -203,6 +282,14 @@ export default function TarotScreen({ navigation }) {
 
     setModalPreguntaVisible(false);
     setLoadingTirada(true);
+    
+    // Iniciar secuencia de mensajes
+    let mensajeIndex = 0;
+    setLoadingMessage(mensajesCarga[mensajeIndex]);
+    const intervalId = setInterval(() => {
+      mensajeIndex = (mensajeIndex + 1) % mensajesCarga.length;
+      setLoadingMessage(mensajesCarga[mensajeIndex]);
+    }, 3000);
 
     try {
       // Realizar la tirada a través de la API
@@ -213,6 +300,15 @@ export default function TarotScreen({ navigation }) {
           pregunta: pregunta.trim(),
         }),
       });
+      
+      // Check for auth reset event
+      if (response.authReset) {
+        clearInterval(intervalId);
+        setLoadingTirada(false);
+        console.log('Auth reset detected during tirada');
+        sessionEvents.emit('authReset');
+        return;
+      }
 
       if (response.ok) {
         const resultado = await response.json();
@@ -225,15 +321,38 @@ export default function TarotScreen({ navigation }) {
         
         // Mostrar mensaje de éxito
         showAlert('Tirada realizada', resultado.mensaje);
+      } else if (response.status === 401) {
+        // Handle session expiration
+        showAlert(
+          'Sesión expirada',
+          'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.',
+          [{
+            text: 'Aceptar',
+            onPress: async () => {
+              setAlertVisible(false);
+              await AsyncStorage.removeItem('access');
+              await AsyncStorage.removeItem('refresh');
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Welcome' }],
+              });
+            }
+          }]
+        );
       } else {
-        // Manejar errores
-        const errorData = await response.json();
-        showAlert('Error', errorData.error || 'No se pudo realizar la tirada');
+        // Manejar otros errores
+        try {
+          const errorData = await response.json();
+          showAlert('Error', errorData.error || 'No se pudo realizar la tirada');
+        } catch (e) {
+          showAlert('Error', 'No se pudo realizar la tirada');
+        }
       }
     } catch (error) {
       console.error('Error realizando tirada:', error);
       showAlert('Error', 'No se pudo conectar con el servidor');
     } finally {
+      clearInterval(intervalId);
       setLoadingTirada(false);
     }
   };
@@ -342,30 +461,74 @@ export default function TarotScreen({ navigation }) {
           </View>
         ) : loadingTirada ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#d6af36" />
-            <Text style={styles.loadingText}>Realizando tirada...</Text>
+            <View style={styles.videoContainer}>
+              <Video
+                source={require('../assets/video/carga_neuronal.mp4')}
+                rate={1.0}
+                volume={1.0}
+                isMuted={true}
+                resizeMode="cover"
+                shouldPlay
+                isLooping
+                style={styles.loadingVideo}
+              />
+            </View>
+            <Text style={styles.loadingText}>{loadingMessage}</Text>
           </View>
         ) : tiradaActual ? (
           <View style={styles.tiradaContainer}>
             <Text style={styles.preguntaTirada}>"{tiradaActual?.pregunta || ''}"</Text>
             
-            <ScrollView contentContainerStyle={styles.scrollTirada}>
-              {renderizarLayoutTirada()}
-            </ScrollView>
+            <View style={styles.scrollContainer}>
+              <ScrollView 
+                contentContainerStyle={styles.scrollTirada}
+                bounces={true}
+                overScrollMode="always"
+                showsVerticalScrollIndicator={true}
+                ref={scrollViewRef}
+                onScroll={(event) => {
+                  const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+                  const isBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 20;
+                  setIsAtBottom(isBottom);
+                }}
+                scrollEventThrottle={16}
+              >
+                {renderizarLayoutTirada()}
+              </ScrollView>
+              
+              {/* Indicador de scroll con chevron */}
+              {tiradaActual && tiradaActual.cartas && tiradaActual.cartas.length > 0 && (
+                <Animated.View style={[
+                  styles.scrollIndicator,
+                  { opacity: fadeAnim }
+                ]}>
+                  <Text style={styles.chevronText}>{isAtBottom ? '▲' : '▼'}</Text>
+                </Animated.View>
+              )}
+            </View>
             
-            <TouchableOpacity
-              style={styles.botonInterpretacion}
-              onPress={verInterpretacionCompleta}
-            >
-              <Text style={styles.botonInterpretacionTexto}>Ver Interpretación Completa</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={styles.botonNuevaTirada}
-              onPress={iniciarSeleccionTirada}
-            >
-              <Text style={styles.textoNuevaTirada}>Nueva Tirada</Text>
-            </TouchableOpacity>
+            <View style={styles.botonesVerticalContainer}>
+              <TouchableOpacity
+                style={styles.botonInterpretacion}
+                onPress={verInterpretacionCompleta}
+              >
+                <Text style={styles.botonInterpretacionTexto}>Ver Interpretación</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.botonNuevaTirada}
+                onPress={iniciarSeleccionTirada}
+              >
+                <Text style={styles.textoNuevaTirada}>Nueva Tirada</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.botonVolver}
+                onPress={volverAPantallaPrincipal}
+              >
+                <Text style={styles.textoBotonVolver}>Volver</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         ) : (
           <View style={styles.centeredContainer}>
@@ -380,10 +543,10 @@ export default function TarotScreen({ navigation }) {
             </View>
             
             <TouchableOpacity
-              style={styles.botonNuevaTirada}
+              style={[styles.botonPrincipal, { width: '90%' }]}
               onPress={iniciarSeleccionTirada}
             >
-              <Text style={styles.textoNuevaTirada}>Realizar Tirada</Text>
+              <Text style={styles.textoPrincipal}>Realizar Tirada</Text>
             </TouchableOpacity>
             
             {historialTiradas && historialTiradas.length > 0 && (
@@ -472,12 +635,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  videoContainer: {
+    width: 200,
+    height: 200,
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginBottom: 20,
+  },
+  loadingVideo: {
+    width: '100%',
+    height: '100%',
+  },
   loadingText: {
     color: '#d6af36',
     fontSize: 18,
     marginTop: 15,
     fontWeight: 'bold',
     fontFamily: 'TarotBody',
+    textAlign: 'center',
+    maxWidth: '80%',
   },
   centeredContainer: {
     flex: 1,
@@ -500,20 +676,58 @@ const styles = StyleSheet.create({
     width: 150,
     height: 150,
   },
+  botonesVerticalContainer: {
+    flexDirection: 'column',
+    width: '90%',
+    marginTop: 10,
+    marginBottom: 10,
+    alignItems: 'center',
+  },
+  botonVolver: {
+    backgroundColor: '#444',
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    borderRadius: 10,
+    width: '100%',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#666',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 3,
+    marginBottom: 8,
+  },
+  textoBotonVolver: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+    fontFamily: 'TarotTitles',
+    textAlign: 'center',
+  },
   botonNuevaTirada: {
     backgroundColor: '#d6af36',
-    paddingVertical: 15,
-    paddingHorizontal: 30,
+    paddingVertical: 12,
+    paddingHorizontal: 15,
     borderRadius: 10,
-    marginTop: 20,
-    width: '80%',
+    width: '100%',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#b69018',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 3,
+    marginBottom: 8,
   },
   textoNuevaTirada: {
     color: '#1f1f2f',
     fontWeight: 'bold',
-    fontSize: 18,
+    fontSize: 16,
     fontFamily: 'TarotTitles',
+    textAlign: 'center',
   },
   botonHistorial: {
     backgroundColor: 'rgba(214, 175, 54, 0.2)',
@@ -523,7 +737,7 @@ const styles = StyleSheet.create({
     marginTop: 15,
     borderWidth: 1,
     borderColor: '#d6af36',
-    width: '80%',
+    width: '90%',
     alignItems: 'center',
   },
   textoHistorial: {
@@ -531,6 +745,28 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 16,
     fontFamily: 'TarotBody',
+  },
+  botonPrincipal: {
+    backgroundColor: '#d6af36',
+    paddingVertical: 18,
+    paddingHorizontal: 25,
+    borderRadius: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#b69018',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 4,
+    marginBottom: 15,
+  },
+  textoPrincipal: {
+    color: '#1f1f2f',
+    fontWeight: 'bold',
+    fontSize: 20,
+    fontFamily: 'TarotTitles',
+    textAlign: 'center',
   },
   noDataText: {
     color: '#999',
@@ -556,27 +792,57 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     fontFamily: 'TarotBody',
   },
+  scrollContainer: {
+    flex: 1,
+    width: '100%',
+    position: 'relative',
+  },
   scrollTirada: {
     flexGrow: 1,
     justifyContent: 'center',
     width: '100%',
+    paddingBottom: 20,
+  },
+  scrollIndicator: {
+    position: 'absolute',
+    right: 10,
+    bottom: 50,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#d6af36',
+  },
+  chevronText: {
+    color: '#d6af36',
+    fontSize: 20,
+    fontWeight: 'bold',
   },
   botonInterpretacion: {
     backgroundColor: 'rgba(214, 175, 54, 0.2)',
     paddingVertical: 12,
-    paddingHorizontal: 25,
+    paddingHorizontal: 15,
     borderRadius: 10,
-    marginTop: 15,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: '#d6af36',
-    width: '80%',
+    width: '100%',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
   },
   botonInterpretacionTexto: {
     color: '#d6af36',
     fontWeight: 'bold',
     fontSize: 16,
-    fontFamily: 'TarotBody',
+    fontFamily: 'TarotTitles',
+    textAlign: 'center',
   },
   loadingCarousel: {
     height: 200,

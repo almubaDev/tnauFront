@@ -1,15 +1,47 @@
 import React from 'react';
 import { Modal, View, Text, StyleSheet, Image, ScrollView, TouchableOpacity } from 'react-native';
-import CartaTarot from './CartaTarot';
+
+// Función para obtener la imagen de la carta según su nombre
+const obtenerImagenCarta = (nombreImagen) => {
+  if (!nombreImagen) return require('../../assets/img/cards/el_loco.jpg');
+
+  const imageMapping = {
+    'el_loco.jpg': require('../../assets/img/cards/el_loco.jpg'),
+    'el_mago.jpg': require('../../assets/img/cards/el_mago.jpg'),
+    'la_sacerdotisa.jpg': require('../../assets/img/cards/la_sacerdotisa.jpg'),
+    'la_emperatriz.jpg': require('../../assets/img/cards/la_emperatriz.jpg'),
+    'el_emperador.jpg': require('../../assets/img/cards/el_emperador.jpg'),
+    'el_sumo_sacerdote.jpg': require('../../assets/img/cards/el_sumo_sacerdote.jpg'),
+    'los_enamorados.jpg': require('../../assets/img/cards/los_enamorados.jpg'),
+    'el_carro.jpg': require('../../assets/img/cards/el_carro.jpg'),
+    'la_fuerza.jpg': require('../../assets/img/cards/la_fuerza.jpg'),
+    'el_ermitaño.jpg': require('../../assets/img/cards/el_ermitaño.jpg'),
+    'la_rueda_de_la_fortuna.jpg': require('../../assets/img/cards/la_rueda_de_la_fortuna.jpg'),
+    'la_justicia.jpg': require('../../assets/img/cards/la_justicia.jpg'),
+    'el_colgado.jpg': require('../../assets/img/cards/el_colgado.jpg'),
+    'la_muerte.jpg': require('../../assets/img/cards/la_muerte.jpg'),
+    'la_templanza.jpg': require('../../assets/img/cards/la_templanza.jpg'),
+    'el_diablo.jpg': require('../../assets/img/cards/el_diablo.jpg'),
+    'la_torre.jpg': require('../../assets/img/cards/la_torre.jpg'),
+    'la_estrella.jpg': require('../../assets/img/cards/la_estrella.jpg'),
+    'la_luna.jpg': require('../../assets/img/cards/la_luna.jpg'),
+    'el_sol.jpg': require('../../assets/img/cards/el_sol.jpg'),
+    'el_juicio.jpg': require('../../assets/img/cards/el_juicio.jpg'),
+    'el_mundo.jpg': require('../../assets/img/cards/el_mundo.jpg'),
+  };
+
+  return imageMapping[nombreImagen] || require('../../assets/img/cards/el_loco.jpg');
+};
 
 const DetalleCartaModal = ({ 
   cartaSeleccionada, 
   visible, 
-  onClose, 
-  obtenerImagenCarta 
+  onClose 
 }) => {
   if (!cartaSeleccionada) return null;
   
+  // Debugging
+  console.log('Carta seleccionada en modal:', JSON.stringify(cartaSeleccionada));
   return (
     <Modal
       transparent={true}

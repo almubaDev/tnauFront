@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
 import { Video } from 'expo-av';
 import { useNavigation } from '@react-navigation/native';
 import { fetchWithAuth } from '../apiHelpers';
@@ -7,9 +7,11 @@ import { useFocusEffect } from '@react-navigation/native';
 import { globalStyles } from '../styles/globalStyles';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import CustomAlert from '../components/CustomAlert';
+import { sessionEvents } from '../App';
 
 export default function ProfileScreen() {
   const [profile, setProfile] = useState(null);
+  const [tiposTirada, setTiposTirada] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigation = useNavigation();
   
@@ -27,17 +29,51 @@ export default function ProfileScreen() {
     setAlertVisible(true);
   };
 
-  const loadProfile = async () => {
+  const loadData = async () => {
     try {
-      const response = await fetchWithAuth('/api/perfil/');
-      if (response.ok) {
-        const data = await response.json();
-        setProfile(data);
+      // Cargar perfil
+      const profileResponse = await fetchWithAuth('/api/perfil/');
+      
+      // Cargar tipos de tirada
+      const tiposTiradaResponse = await fetchWithAuth('/api/listar-tipos-tirada/');
+      
+      // Check for auth reset event
+      if (profileResponse.authReset || tiposTiradaResponse.authReset) {
+        console.log('Auth reset detected in ProfileScreen');
+        sessionEvents.emit('authReset');
+        return;
+      }
+      
+      if (profileResponse.ok && tiposTiradaResponse.ok) {
+        const profileData = await profileResponse.json();
+        const tiposTiradaData = await tiposTiradaResponse.json();
+        
+        setProfile(profileData);
+        setTiposTirada(tiposTiradaData);
+      } else if (profileResponse.status === 401 || tiposTiradaResponse.status === 401) {
+        // Handle session expiration
+        showAlert(
+          'Sesión expirada',
+          'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.',
+          [{
+            text: 'Aceptar',
+            onPress: async () => {
+              setAlertVisible(false);
+              await AsyncStorage.removeItem('access');
+              await AsyncStorage.removeItem('refresh');
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Welcome' }],
+              });
+            }
+          }]
+        );
       } else {
-        console.error('Error al cargar perfil:', response.status);
+        console.error('Error al cargar datos:', 
+          profileResponse.status, tiposTiradaResponse.status);
       }
     } catch (error) {
-      console.error('Error perfil:', error);
+      console.error('Error al cargar datos:', error);
     } finally {
       setLoading(false);
     }
@@ -45,7 +81,7 @@ export default function ProfileScreen() {
 
   useFocusEffect(
     React.useCallback(() => {
-      loadProfile();
+      loadData();
     }, [])
   );
   
@@ -93,25 +129,25 @@ export default function ProfileScreen() {
         style={StyleSheet.absoluteFill}
       />
       <View style={styles.overlay}>
-        <Text style={globalStyles.title}>Perfil del Usuario</Text>
+        <Text style={globalStyles.title}>Información del Consultante</Text>
         {loading ? (
           <ActivityIndicator color="#d6af36" size="large" />
         ) : profile ? (
           <View style={styles.card}>
-            <Text style={globalStyles.label}>Gemas:</Text>
-            <Text style={globalStyles.value}>{profile.gemas}</Text>
+            <View style={styles.gemsContainer}>
+              <Image 
+                source={require('../assets/img/gem_packs/pack_50.png')} 
+                style={styles.gemImage}
+                resizeMode="contain" 
+              />
+              <View style={styles.gemsTextContainer}>
+                <Text style={globalStyles.label}>Gemas:</Text>
+                <Text style={globalStyles.value}>{profile.gemas}</Text>
+              </View>
+            </View>
+
             <Text style={globalStyles.label}>Suscripción:</Text>
             <Text style={globalStyles.value}>{profile.tiene_suscripcion ? 'Activa' : 'Inactiva'}</Text>
-            <Text style={globalStyles.label}>Tiradas Restantes (Este Mes):</Text>
-            {profile.tiene_suscripcion ? (
-              <View>
-                <Text style={globalStyles.value}>Básicas: {100 - profile.tiradas_basicas_usadas}/100</Text>
-                <Text style={globalStyles.value}>Claridad: {50 - profile.tiradas_claridad_usadas}/50</Text>
-                <Text style={globalStyles.value}>Profundas: {30 - profile.tiradas_profundas_usadas}/30</Text>
-              </View>
-            ) : (
-              <Text style={globalStyles.value}>Requiere suscripción</Text>
-            )}
             <TouchableOpacity
               onPress={() => navigation.navigate('MotorNauticaScreen')}
               style={styles.button}
@@ -162,6 +198,19 @@ const styles = StyleSheet.create({
     width: '90%',
     borderColor: '#d6af36',
     borderWidth: 1.5,
+  },
+  gemsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  gemImage: {
+    width: 60,
+    height: 60,
+    marginRight: 15,
+  },
+  gemsTextContainer: {
+    flex: 1,
   },
   button: {
     marginTop: 20,

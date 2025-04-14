@@ -20,13 +20,13 @@ const PreguntaModal = ({
       <View style={styles.modalContainer}>
         <View style={styles.modalPreguntaContent}>
           <Text style={styles.modalTitle}>Tu Pregunta</Text>
-          
+
           {tipoTiradaSeleccionado && (
             <Text style={styles.tiradaSeleccionadaText}>
               Tirada: {tipoTiradaSeleccionado.nombre}
             </Text>
           )}
-          
+
           <Text style={styles.modalLabel}>¿Qué deseas preguntar al Tarot?</Text>
           <TextInput
             style={styles.preguntaInput}
@@ -38,15 +38,8 @@ const PreguntaModal = ({
             onChangeText={setPregunta}
           />
           <Text style={styles.contadorCaracteres}>{pregunta.length}/200</Text>
-          
+
           <View style={styles.modalButtons}>
-            <TouchableOpacity
-              style={styles.cancelarButton}
-              onPress={onBack}
-            >
-              <Text style={styles.cancelarButtonText}>Volver</Text>
-            </TouchableOpacity>
-            
             <TouchableOpacity
               style={[
                 styles.confirmarButton,
@@ -56,6 +49,13 @@ const PreguntaModal = ({
               onPress={onConfirm}
             >
               <Text style={styles.confirmarButtonText}>Consultar</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.cancelarButton}
+              onPress={onBack}
+            >
+              <Text style={styles.cancelarButtonText}>Volver</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -111,6 +111,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     borderWidth: 1,
     borderColor: '#d6af36',
+    fontFamily: 'TarotBody',
   },
   contadorCaracteres: {
     alignSelf: 'flex-end',
@@ -120,42 +121,56 @@ const styles = StyleSheet.create({
     fontFamily: 'TarotBody',
   },
   modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
+    width: '100%',
+    marginTop: 10,
+  },
+  confirmarButton: {
+    backgroundColor: '#e0be4b',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginBottom: 15,
+    borderWidth: 2,
+    borderColor: '#d6af36',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 3,
+    elevation: 5,
   },
   cancelarButton: {
     backgroundColor: '#555',
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 20,
-    borderRadius: 5,
-    flex: 1,
-    marginRight: 10,
+    borderRadius: 10,
     alignItems: 'center',
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#666',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 3,
   },
   cancelarButtonText: {
     color: '#fff',
     fontWeight: 'bold',
-    fontSize: 16,
-    fontFamily: 'TarotBody',
-  },
-  confirmarButton: {
-    backgroundColor: '#d6af36',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 5,
-    flex: 1,
-    marginLeft: 10,
-    alignItems: 'center',
+    fontSize: 18,
+    fontFamily: 'TarotTitles',
   },
   confirmarButtonText: {
     color: '#1f1f2f',
     fontWeight: 'bold',
-    fontSize: 16,
-    fontFamily: 'TarotBody',
+    fontSize: 18,
+    fontFamily: 'TarotTitles',
   },
   confirmarButtonDisabled: {
     backgroundColor: '#9e9e9e',
     opacity: 0.7,
+    borderColor: '#888',
   },
 });
 

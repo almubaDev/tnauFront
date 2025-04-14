@@ -56,11 +56,13 @@ export default function SubscriptionScreen() {
         ) : (
           <View style={styles.card}>
             <Text style={styles.title}>Suscripción Mensual</Text>
-            <Text style={styles.text}>Tiradas básicas y de claridad limitadas a 15 al mes.</Text>
-            <Text style={styles.text}>Tiradas profundas: 2 al mes.</Text>
+            <Text style={styles.text}>Tiradas básicas: 10 al mes.</Text>
+            <Text style={styles.text}>Tiradas de claridad: 10 al mes.</Text>
+            <Text style={styles.text}>Tiradas profundas: 10 al mes.</Text>
             <Text style={styles.text}>Acceso exclusivo a pociones mágicas.</Text>
+            <Text style={styles.text}>30 gemas gratis.</Text>
             <Text style={styles.text}>Interpretación extendida vía Motor Náutica.</Text>
-            <Text style={styles.price}>$4.99 / mes</Text>
+            <Text style={styles.price}>$9.99 / mes</Text>
 
             {perfil?.tiene_suscripcion ? (
               <TouchableOpacity

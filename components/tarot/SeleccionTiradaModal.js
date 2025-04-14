@@ -13,6 +13,9 @@ const SeleccionTiradaModal = ({
   verificarDisponibilidadTirada,
   onContinuar
 }) => {
+  // Definir el ancho del elemento de tirada para cálculos correctos
+  const itemWidth = width * 0.9;
+  
   return (
     <Modal
       transparent={true}
@@ -32,49 +35,52 @@ const SeleccionTiradaModal = ({
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={styles.tiradaCarouselScrollContent}
                   pagingEnabled
-                  snapToInterval={width * 0.9}
+                  snapToInterval={itemWidth}
                   snapToAlignment="center"
                   decelerationRate="fast"
                   onMomentumScrollEnd={(event) => {
-                    // Calcular qué tirada está centrada
+                    // Calcular qué tirada está centrada con el ancho ajustado
                     const offsetX = event.nativeEvent.contentOffset.x;
-                    const index = Math.round(offsetX / width);
+                    const index = Math.round(offsetX / itemWidth);
+                    console.log('Scroll end - offset:', offsetX, 'calculated index:', index);
                     if (index >= 0 && index < tiposTirada.length) {
                       setCurrentTiradaIndex(index);
                       setTipoTiradaSeleccionado(tiposTirada[index]);
                     }
                   }}
                 >
-                  {tiposTirada.map((tipoTirada, index) => (
-                    <View key={index} style={styles.tiradaCardWrapper}>
-                      <View style={styles.tiradaCardContent}>
-                        <Text style={styles.tiradaCardTitle}>
-                          {tipoTirada?.nombre || 'Cargando...'}
-                        </Text>
-                        <Text style={styles.tiradaCardCartas}>
-                          {tipoTirada?.num_cartas || 0} cartas
-                        </Text>
-                        <Text style={styles.tiradaCardCosto}>
-                          {tipoTirada?.costo_gemas || 0} gemas
-                        </Text>
-                        <Text style={styles.tiradaCardDesc}>
-                          {tipoTirada?.descripcion || 'Sin descripción disponible'}
-                        </Text>
-                        
-                        {tipoTirada && verificarDisponibilidadTirada(tipoTirada)?.puede ? (
-                          <Text style={styles.tiradaCardDisponible}>
-                            {verificarDisponibilidadTirada(tipoTirada)?.mensaje}
+                  {tiposTirada.map((tipoTirada, index) => {
+                    // Log para debug
+                    console.log(`Tirada ${index}:`, tipoTirada);
+                    return (
+                      <View key={index} style={[styles.tiradaCardWrapper, { width: itemWidth }]}>
+                        <View style={styles.tiradaCardContent}>
+                          <Text style={styles.tiradaCardTitle}>
+                            {tipoTirada?.nombre || 'Cargando...'}
                           </Text>
-                        ) : (
-                          <Text style={styles.tiradaCardNoDisponible}>
-                            {tipoTirada ? 
-                              verificarDisponibilidadTirada(tipoTirada)?.mensaje :
-                              'Cargando disponibilidad...'}
+                          <Text style={styles.tiradaCardCartas}>
+                            {typeof tipoTirada?.num_cartas === 'number' ? `${tipoTirada.num_cartas} cartas` : 'Cartas no disponibles'}
                           </Text>
-                        )}
+                          {/* Se eliminó la línea de costo en gemas según lo solicitado */}
+                          <Text style={styles.tiradaCardDesc}>
+                            {tipoTirada?.descripcion || 'Sin descripción disponible'}
+                          </Text>
+                          
+                          {tipoTirada && verificarDisponibilidadTirada(tipoTirada)?.puede ? (
+                            <Text style={styles.tiradaCardDisponible}>
+                              {verificarDisponibilidadTirada(tipoTirada)?.mensaje}
+                            </Text>
+                          ) : (
+                            <Text style={styles.tiradaCardNoDisponible}>
+                              {tipoTirada ? 
+                                verificarDisponibilidadTirada(tipoTirada)?.mensaje :
+                                'Cargando disponibilidad...'}
+                            </Text>
+                          )}
+                        </View>
                       </View>
-                    </View>
-                  ))}
+                    );
+                  })}
                 </ScrollView>
             
                 {/* Indicadores de paginación */}
@@ -101,20 +107,20 @@ const SeleccionTiradaModal = ({
           <View style={styles.modalButtonsContainer}>
             <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={styles.cancelarButton}
+                style={styles.noButton}
                 onPress={onClose}
               >
-                <Text style={styles.cancelarButtonText}>Cancelar</Text>
+                <Text style={styles.noButtonText}>No</Text>
               </TouchableOpacity>
               
               <TouchableOpacity
                 style={[
-                  styles.confirmarButton,
+                  styles.siButton,
                   (!tiposTirada || 
                    tiposTirada.length === 0 || 
                    currentTiradaIndex < 0 ||
                    !verificarDisponibilidadTirada(tiposTirada[currentTiradaIndex])?.puede) && 
-                  styles.confirmarButtonDisabled
+                  styles.siButtonDisabled
                 ]}
                 disabled={
                   !tiposTirada || 
@@ -124,7 +130,7 @@ const SeleccionTiradaModal = ({
                 }
                 onPress={onContinuar}
               >
-                <Text style={styles.confirmarButtonText}>Seleccionar</Text>
+                <Text style={styles.siButtonText}>Sí</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -168,7 +174,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tiradaCardWrapper: {
-    width: width,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 10,
@@ -180,8 +185,7 @@ const styles = StyleSheet.create({
     height: 260,
     width: '90%',
     justifyContent: 'space-between',
-    borderWidth: 2,
-    borderColor: '#d6af36',
+    borderWidth: 0,
     alignSelf: 'center',
   },
   tiradaCardTitle: {
@@ -268,40 +272,44 @@ const styles = StyleSheet.create({
   },
   modalButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'space-around',
     width: '100%',
   },
-  cancelarButton: {
+  // Nuevo estilo de botón circular para "No"
+  noButton: {
     backgroundColor: '#555',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 5,
-    flex: 1,
-    marginRight: 10,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#999',
+    marginHorizontal: 20,
   },
-  cancelarButtonText: {
+  noButtonText: {
     color: '#fff',
     fontWeight: 'bold',
-    fontSize: 16,
-    fontFamily: 'TarotBody',
+    fontSize: 18,
+    fontFamily: 'TarotTitles',
   },
-  confirmarButton: {
+  // Nuevo estilo de botón circular para "Sí"
+  siButton: {
     backgroundColor: '#d6af36',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 5,
-    flex: 1,
-    marginLeft: 10,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
     alignItems: 'center',
+    marginHorizontal: 20,
   },
-  confirmarButtonText: {
+  siButtonText: {
     color: '#1f1f2f',
     fontWeight: 'bold',
-    fontSize: 16,
-    fontFamily: 'TarotBody',
+    fontSize: 18,
+    fontFamily: 'TarotTitles',
   },
-  confirmarButtonDisabled: {
+  siButtonDisabled: {
     backgroundColor: '#9e9e9e',
     opacity: 0.7,
   },

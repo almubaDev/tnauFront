@@ -1,33 +1,49 @@
 import React from 'react';
-import { TouchableOpacity, Image, Text, StyleSheet } from 'react-native';
+import { TouchableOpacity, Image, Text, StyleSheet, View } from 'react-native';
 
-const CartaTarot = ({ carta, onPress }) => {
-  // Verificar que carta existe antes de acceder a sus propiedades
-  if (!carta) return null;
+const CartaTarot = ({ carta = null, imagen, nombre, invertida, onPress, width = 120, height = 200 }) => {
+  // Si recibimos un objeto carta completo, lo usamos; de lo contrario, usamos las props individuales
+  const cartaImagen = carta?.carta_imagen || imagen;
+  const cartaNombre = carta?.carta_nombre || nombre;
+  const esInvertida = carta?.invertida || invertida;
   
-  const imageSource = obtenerImagenCarta(carta?.carta_imagen);
-  
+  // Si no hay ni carta ni propiedades individuales, no mostramos nada
+  if (!carta && !imagen && !nombre) {
+    console.warn("CartaTarot: No se recibieron datos de carta");
+    return (
+      <View style={[styles.cartaTarot, { width, height }]}>
+        <Text style={styles.errorText}>Carta sin datos</Text>
+      </View>
+    );
+  }
+
+  const imageSource = obtenerImagenCarta(cartaImagen);
+
   return (
     <TouchableOpacity style={styles.cartaTarot} onPress={onPress}>
       <Image
         source={imageSource}
         style={[
+          {
+            width,
+            height,
+          },
           styles.imagenCarta,
-          carta?.invertida && styles.cartaInvertida
+          esInvertida && styles.cartaInvertida,
         ]}
         resizeMode="contain"
       />
-      <Text style={styles.nombreCarta}>{carta?.carta_nombre || 'Carta'}</Text>
+      {/* <Text style={[styles.nombreCarta, { width }]} numberOfLines={1}>
+        {cartaNombre || 'Carta'}
+      </Text> */}
     </TouchableOpacity>
   );
 };
 
 // Función para obtener la imagen de la carta según su nombre
 const obtenerImagenCarta = (nombreImagen) => {
-  // Verificar que nombreImagen existe
   if (!nombreImagen) return require('../../assets/img/cards/el_loco.jpg');
-  
-  // Mapear nombres de imágenes a archivos locales
+
   const imageMapping = {
     'el_loco.jpg': require('../../assets/img/cards/el_loco.jpg'),
     'el_mago.jpg': require('../../assets/img/cards/el_mago.jpg'),
@@ -52,19 +68,22 @@ const obtenerImagenCarta = (nombreImagen) => {
     'el_juicio.jpg': require('../../assets/img/cards/el_juicio.jpg'),
     'el_mundo.jpg': require('../../assets/img/cards/el_mundo.jpg'),
   };
-  
-  return imageMapping[nombreImagen] || require('../../assets/img/cards/el_loco.jpg'); // Imagen por defecto
+
+  return imageMapping[nombreImagen] || require('../../assets/img/cards/el_loco.jpg');
 };
 
 const styles = StyleSheet.create({
+  errorText: {
+    color: 'red',
+    textAlign: 'center',
+    fontSize: 12,
+  },
   cartaTarot: {
     alignItems: 'center',
     marginHorizontal: 5,
     marginVertical: 10,
   },
   imagenCarta: {
-    width: 120,
-    height: 200,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#d6af36',
@@ -83,7 +102,6 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 5,
-    width: '100%',
     position: 'absolute',
     bottom: 10,
   },

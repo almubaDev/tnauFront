@@ -1,52 +1,66 @@
 import React from 'react';
-import { ScrollView, View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import CartaTarot from './CartaTarot';
 
+const { width } = Dimensions.get('window');
+
 const TiradaProfunda = ({ cartas, onCartaPress }) => {
-  if (!cartas || cartas.length === 0) return null;
-  
-  // Nombres de posiciones para tirada profunda
+  const cardWidth = Math.min((width - 60) / 2, 150); // 2 cartas por fila
+  const cardHeight = cardWidth * 1.6;
+
   const posiciones = [
-    "Esencia del Problema",
-    "Pensamiento Personal", "Pensamiento Externo", "Pensamiento Ideal",
-    "Emociones Personales", "Emociones Externas", "Emociones Ideales",
-    "Situación Material Personal", "Situación Material Externa", "Situación Material Ideal",
-    "Resultado Final"
+    'Situación actual',
+    'Desafío',
+    'Pasado cercano',
+    'Futuro cercano',
+    'Meta consciente',
+    'Influencia inconsciente',
+    'Tú en la situación',
+    'Entorno',
+    'Esperanzas y miedos',
+    'Resultado final'
   ];
-  
+
+  // Debugging para ver estructura de datos
+  console.log('Datos de cartas en TiradaProfunda:', JSON.stringify(cartas.slice(0, 1)));
+
   return (
-    <ScrollView contentContainerStyle={styles.tiradaProfundaContainer}>
+    <View style={styles.contenedor}>
       {cartas.map((carta, index) => (
-        <View key={index} style={styles.cartaConLabelProfunda}>
-          <Text style={styles.posicionLabel}>{posiciones[index] || `Posición ${index + 1}`}</Text>
+        <View key={index} style={[styles.cartaContenedor, { width: cardWidth }]}>
+          <Text style={styles.posicionLabel}>
+            {posiciones[index] || `Carta ${index + 1}`}
+          </Text>
           <CartaTarot
             carta={carta}
             onPress={() => onCartaPress(carta)}
+            width={cardWidth}
+            height={cardHeight}
           />
         </View>
       ))}
-    </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  tiradaProfundaContainer: {
-    alignItems: 'center',
-    paddingVertical: 20,
+  contenedor: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
     paddingHorizontal: 10,
+    gap: 15,
   },
-  cartaConLabelProfunda: {
+  cartaContenedor: {
     alignItems: 'center',
-    marginVertical: 15,
-    width: '100%',
+    margin: 10,
   },
   posicionLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 14,
     color: '#d6af36',
-    marginBottom: 8,
-    textAlign: 'center',
     fontFamily: 'TarotTitles',
+    marginBottom: 5,
+    textAlign: 'center',
   },
 });
 

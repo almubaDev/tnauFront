@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Image, View, Text } from 'react-native';
+import { Image, View, Text, ActivityIndicator, BackHandler, Alert } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Font from 'expo-font';
 import TarotScreen from './screens/TarotScreen';
 import MarketScreen from './screens/MarketScreen';
@@ -24,15 +26,9 @@ import PocionesMiscelaneoScreen from './screens/PocionesMiscelaneoScreen';
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-// Carga de fuentes personalizadas
-const loadFonts = () => {
-  return Font.loadAsync({
-    'TarotTitles': require('./assets/fonts/IMFellDWPicaSC-Regular.ttf'),
-    'TarotBody': require('./assets/fonts/Junicode.ttf'),
-  });
-};
+// Este método de carga ya no se utilizará, ahora lo haremos en el useEffect
 
-function MainTabs() {
+function MainTabs({ fontsLoaded }) {
   return (
     <Tab.Navigator screenOptions={{ 
       headerShown: false,
@@ -42,7 +38,6 @@ function MainTabs() {
     }}>
       <Tab.Screen
         name="Tarot"
-        component={TarotScreen}
         options={{
           tabBarIcon: () => (
             <Image 
@@ -51,7 +46,9 @@ function MainTabs() {
             />
           ),
         }}
-      />
+      >
+        {() => <TarotScreen fontsLoaded={fontsLoaded} />}
+      </Tab.Screen>
       <Tab.Screen
         name="Mercado"
         component={MarketScreen}
@@ -92,39 +89,129 @@ function MainTabs() {
   );
 }
 
+// Custom event for session expiration
+export const sessionEvents = {
+  listeners: {},
+  
+  addListener(event, callback) {
+    if (!this.listeners[event]) {
+      this.listeners[event] = [];
+    }
+    this.listeners[event].push(callback);
+    return () => this.removeListener(event, callback);
+  },
+  
+  removeListener(event, callback) {
+    if (!this.listeners[event]) return;
+    this.listeners[event] = this.listeners[event].filter(cb => cb !== callback);
+  },
+  
+  emit(event, ...args) {
+    if (!this.listeners[event]) return;
+    this.listeners[event].forEach(callback => callback(...args));
+  }
+};
+
 export default function App() {
   const [fontsLoaded, setFontsLoaded] = useState(false);
+  const navigationRef = useRef(null);
+  
+  // Handle authentication reset events
+  useEffect(() => {
+    const handleAuthReset = () => {
+      console.log('Session expired, navigating to Welcome screen');
+      if (navigationRef.current) {
+        navigationRef.current.reset({
+          index: 0,
+          routes: [{ name: 'Welcome' }],
+        });
+      }
+    };
+    
+    // Subscribe to auth reset events
+    const unsubscribe = sessionEvents.addListener('authReset', handleAuthReset);
+    
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
-    async function prepare() {
-      try {
-        // Precargar fuentes
-        await loadFonts();
-      } catch (e) {
-        console.warn(e);
-      } finally {
-        setFontsLoaded(true);
-      }
+    async function loadFonts() {
+      await Font.loadAsync({
+        TarotTitles: require('./assets/fonts/IMFellDWPicaSC-Regular.ttf'),
+        TarotBody: require('./assets/fonts/Junicode.ttf'),
+      });
+      setFontsLoaded(true);
     }
-
-    prepare();
+    loadFonts();
   }, []);
 
   if (!fontsLoaded) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
-        <Text style={{ color: '#d6af36' }}>Cargando...</Text>
+      <View style={{ 
+        flex: 1, 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        backgroundColor: '#000' 
+      }}>
+        <ActivityIndicator size="large" color="#d6af36" />
+        <Text style={{ 
+          color: '#d6af36', 
+          marginTop: 10,
+          fontSize: 18
+        }}>
+          Cargando fuentes...
+        </Text>
       </View>
     );
   }
 
+  // Función para manejar el comportamiento personalizado del botón de retroceso
+  const handleBackPress = () => {
+    // Minimizar la aplicación directamente sin mostrar alerta
+    BackHandler.exitApp();
+    return true; // Previene el comportamiento por defecto
+  };
+
   return (
-    <NavigationContainer>
-      <Stack.Navigator initialRouteName="Welcome" screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Welcome" component={WelcomeScreen} />
+    <NavigationContainer ref={navigationRef}>
+      <Stack.Navigator 
+        initialRouteName="Welcome" 
+        screenOptions={{ 
+          headerShown: false,
+          gestureEnabled: false // Desactivar gestos de deslizamiento para retroceder
+        }}
+      >
+        <Stack.Screen 
+          name="Welcome" 
+          component={WelcomeScreen} 
+          options={{ gestureEnabled: true }} // Permitir gestos solo en Welcome
+        />
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="Registro" component={RegistroScreen} />
-        <Stack.Screen name="MainTabs" component={MainTabs} />
+        <Stack.Screen 
+          name="MainTabs" 
+          options={{
+            // Evita volver atrás desde las tabs principales
+            headerBackVisible: false,
+            gestureEnabled: false // Desactivar deslizamiento para volver
+          }}
+        >
+          {(props) => {
+            // Agregar manejo del botón de retroceso cuando estamos en las tabs principales
+            useFocusEffect(
+              React.useCallback(() => {
+                const backHandler = BackHandler.addEventListener(
+                  "hardwareBackPress", 
+                  handleBackPress
+                );
+                return () => backHandler.remove();
+              }, [])
+            );
+            return <MainTabs fontsLoaded={fontsLoaded} {...props} />;
+          }}
+        </Stack.Screen>
         <Stack.Screen name="SubscriptionScreen" component={SubscriptionScreen} />
         <Stack.Screen name="HechizosAmor" component={HechizosAmorScreen} />
         <Stack.Screen name="HechizosDinero" component={HechizosDineroScreen} />
